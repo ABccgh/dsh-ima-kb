@@ -1,0 +1,46 @@
+# Ignore rules for the `dsh-ima-kb` plugin package.
+#
+# This repository IS a package directory, not a harness home and not a preset
+# tree. Three patterns a session-rooted project would need are deliberately
+# ABSENT — `.dsh/`, `sessions/`, `storages/`, and `.credentials.yaml` /
+# `settings.yaml` — because they describe `$DSH_HOME`, which is a different
+# directory entirely, and nothing under this root ever produces them. Leaving
+# them in would suppress a real file of that name if one ever appeared here, and
+# would imply this tree holds state it does not.
+#
+# Same shape as `dsh-account-balance`'s, for the same reasons; kept its two
+# plugin-specific notes where they still apply.
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# `node_modules/` above is load-bearing rather than cosmetic. This package is
+# loaded by DSH through a symlink, and Node resolves its bare specifiers from the
+# link's REAL path — so `cos-nodejs-sdk-v5` must be installed into THIS
+# directory to be reachable at runtime. That makes `node_modules/` a required
+# local artifact, not a build cache, and it still must never be committed.
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Secrets — kept because a stray key must never be committed, whatever the layout.
+# The plugin resolves both ima credentials at runtime from the harness credential
+# store (`$DSH_HOME/.credentials.yaml`, keys `IMA_OPENAPI_CLIENTID` and
+# `IMA_OPENAPI_APIKEY`) and stores only the reference NAMES in its composition.
+# So no secret belongs in this tree, and this rule is a backstop, not a convenience.
+.env
+.env.*
+*.pem
+*.key
+
+# Verification scratch. The mount/execute check for this plugin deliberately lives
+# OUTSIDE this tree, in the profile directory where the loader's own resolution
+# works; if a copy ever lands here it is scratch, not source.
+*.local.mjs

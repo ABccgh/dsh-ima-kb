@@ -1,0 +1,14 @@
+# One rule, two reasons.
+#
+# `dsh-smith`'s push tooling uploads blob bytes obtained from `git cat-file blob`,
+# and a CRLF conversion in the working tree makes the checked-out file differ from
+# the blob it should be. Pinning the repository to LF keeps the stored bytes and
+# the working tree in agreement on every platform, so a fresh clone is clean
+# rather than showing every tracked file as modified.
+#
+# The second reason is specific to this package: its sources carry Chinese prose
+# in comments, doc blocks and tool descriptions, and the README is written in
+# Chinese. A toolchain that rewrote line endings through a locale-dependent code
+# page would corrupt that text, so the pin matters more here than it does for an
+# ASCII-only package.
+* text=auto eol=lf

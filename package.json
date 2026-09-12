@@ -1,0 +1,38 @@
+{
+  "name": "dsh-ima-kb",
+  "version": "0.1.0",
+  "description": "Tencent ima (ima.copilot) knowledge-base tools for DeepSeek Harness: list, cross-knowledge-base fan-out search, browse, URL import, file upload and notes, over the official ima OpenAPI.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "cordis-plugin",
+    "plugin",
+    "ima",
+    "ima.copilot",
+    "knowledge-base",
+    "腾讯ima",
+    "知识库"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "author": "ABccgh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ABccgh/dsh-ima-kb.git"
+  },
+  "homepage": "https://github.com/ABccgh/dsh-ima-kb#readme",
+  "bugs": {
+    "url": "https://github.com/ABccgh/dsh-ima-kb/issues"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "^3.0.0"
+  }
+}
