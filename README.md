@@ -1,6 +1,6 @@
 # dsh-ima-kb
 
-把腾讯 **ima**（ima.copilot）的知识库接进 DeepSeek Harness：注册 5 个宿主平面工具，
+把腾讯 **ima**（ima.copilot）的知识库接进 DeepSeek Harness：注册 9 个宿主平面工具，
 让任意会话都能检索、浏览、并（有限地）读取你的 ima 知识库。
 
 本文件里每一条接口行为都是**在真实账号上实测**得到的，并标注了与第三方文档不符之处。
