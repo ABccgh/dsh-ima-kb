@@ -1,10 +1,15 @@
 # dsh-ima-kb
 
-把腾讯 **ima**（ima.copilot）的知识库接进 DeepSeek Harness：注册 9 个宿主平面工具，
-让任意会话都能检索、浏览、并（有限地）读取你的 ima 知识库。
+把腾讯 **ima**（ima.copilot）的知识库接进 DeepSeek Harness：注册 **13 个**宿主平面工具，
+让任意会话都能建库、建目录、检索、浏览、批量写入、（有限地）读取你的 ima 知识库。
 
 本文件里每一条接口行为都是**在真实账号上实测**得到的，并标注了与第三方文档不符之处。
 请把"实测"当作依据，不要把它当作可有可无的注释 —— 下面第 2 节全是文档说错了的地方。
+
+> **本次更新（新增 4 个工具）**：`ima_kb_create`、`ima_kb_mkdir`、`ima_import_urls`、
+> `ima_upload_dir`。前两个补上了"建库/建目录"这条一直缺的能力（**并且推翻了本 README 一条
+> 错误结论**）；后两个是"同一件事的批量版"——ima 没有批量接口，而几百条语料逐条调用会把模型
+> 调用也吃掉几百次。使用边界见 1.1。
 
 ---
 
@@ -16,17 +21,31 @@ ima 没有跨知识库检索接口，没有相关度分数，命中还有 100 �
 | 工具 | 作用 |
 | --- | --- |
 | `ima_kb_list` | 列出全部可访问知识库（自有/订阅、条目数、角色、类型） |
+| `ima_kb_create` | **建知识库**。实测接口存在：`Name` 正则 `^\S[\S ]{0,23}\S?$`（1–25 字符）、`Type` ∈ {`KBT_MINE_KB`,`KBT_SHARED_KB`,`KBT_SUBSCRIBED_CREATE_KB`}——两个必填项都是被拒绝的请求试出来的 |
+| `ima_kb_mkdir` | **建文件夹**。实测 `create_folder` 存在：必填 `knowledge_base_id` + `name`（≤255）。**这修正了本 README 原先"接口没有任何创建文件夹能力"的错误结论** |
 | `ima_kb_search` | **跨全部知识库并行检索**，按标题匹配强度本地排序，去重，显式标注截断 |
 | `ima_kb_browse` | 按游标浏览知识库内容与子文件夹 |
 | `ima_media_info` | 判断某条能否回读；可读时给出原始 URL |
 | `ima_import_url` | 把网页 URL 批量导入知识库（1–10 条） |
+| `ima_import_urls` | **同一件事的批量版**：收任意长度 URL 列表，自动按 10 条分批、并发提交、汇总结果。存在的理由是几百条 URL 的语料不该耗掉同样多的模型调用 |
 | `ima_upload_file` | **上传本机文件到自有知识库**：查重 → create_media → COS 直传 → add_knowledge |
+| `ima_upload_dir` | **批量上传一个目录**：递归收集、一次查重 2000 个名字、限并发、`dryRun` 只看计划。同上：批量写入不该逐文件调用 |
 | `ima_note_create` | 新建 Markdown 笔记到 ima |
 | `ima_note_get` | 读取笔记正文（按 maxChars 截断，避免刷爆上下文） |
 | `ima_note_list` | 列出笔记本与笔记 |
 
 设计上刻意把**限制**与**结果**放在同一段文本里返回。只给结果的工具会让模型把一个被截断、
 无片段、无相关度的列表当成完整答案讲给用户听。
+
+### 1.1 批量工具的三条使用边界（都是实测）
+
+1. **先 `dryRun` 再写。** `ima_upload_dir` 必须先以 `dryRun: true` 看清单：ima 开放接口
+   **没有删除能力**，误传只能到客户端手工处理。
+2. **`duplicatePolicy: 'skip'` 让重跑幂等**，判重按**文件名**（`check_repeated_names`），所以
+   内容更新要换文件名，否则会被判为已存在而跳过。
+3. **URL 导入是就地更新**：同一 URL 重复导入返回**逐字节相同**的 `media_id`、条目数不增加
+   （实测两次导入 13 → 13 条）。这是本插件唯一可用的"刷新"机制，因为接口没有删除；
+   而 `add_knowledge`（文件上传）**没有 upsert**，每次上传都是新的永久条目。
 
 ## 2. 实测的接口真相（与第三方文档冲突之处）
 
@@ -116,10 +135,19 @@ dsh plugin --profile web add C:\Users\<你>\.dsh\plugins\dsh-ima-kb
       config:
         clientIdRef: IMA_OPENAPI_CLIENTID
         apiKeyRef: IMA_OPENAPI_APIKEY
+        requestTimeoutMs: 20000
+        maxRetries: 2
         searchConcurrency: 4
         maxRows: 25
+        skipKnowledgeBaseIds: []
         preferOwned: true
+        bulkMaxFiles: 600
+        bulkConcurrency: 2
 ```
+
+**整段替换，不是合并**：patch 覆盖的是这一行的整个 `config`，所以省略任何一个键它都会
+**静默退回默认值**。`bulkMaxFiles` 是批量工具单次处理的上限（也用于批量查重的文件数），
+`bulkConcurrency` 是批量上传的并发数（也是 `ima_import_urls` 的并发批次数）。
 
 ### 3.3 凭证
 
@@ -203,8 +231,26 @@ Standard Schema 校验都是在包内按 `@deepseek-ai/dsh-tools` 与 cordis 的
 - **删除**：**开放接口完全没有删除能力**。知识库侧 `delete_knowledge`／`del_knowledge`／
   `delete_media`，笔记侧 `delete_doc`／`del_doc`／`delete_note`／`remove_doc`／`trash_doc`
   —— 全部返回 **404**。误导入或误创建的条目只能在 ima 客户端里手工处理。
+  **因此批量工具只提供 `dryRun`，且默认 `duplicatePolicy: 'skip'`；知识库和文件夹同样删不掉。**
 - **大小上限**（Excel/TXT/MD ≤10MB、图片 ≤30MB、PDF/Word/PPT ≤200MB）来自第三方文档，
   **未实测**；插件按它做上传前拦截，但不要把它当成已验证的精确值。
+- **文件夹**：`create_folder` 可以建（见 `ima_kb_mkdir`），但没有删除、改名或移动的接口；
+  `import_urls` / `add_knowledge` 只接受**既有**的 `folder_id`。
+- **`create_folder` 的返回字段是 `media_id`**（形如 `folder_7504822093747077`），**不是**
+  `folder_id`。读错会得到 `undefined`，而文件夹其实已经建好 —— 这个坑踩过一次。
+- **批量上传的内容回读**：与单文件上传一样，`media_type: 7` 一律 `220030`，**永远读不回来**；
+  批量工具的返回里给出每个文件的 `sha256`，是让调用者能对着**本机原件**自证，而不是自证 ima 里存了什么。
+- **`ima_import_urls` 的"成功"不等于 URL 有效**：ima 不做存在性检查——一个 404 的 URL 也会
+  返回成功并生成条目（实测：`ThisPageDoesNotExist zzz` 也被抓成了一个条目）。工具只转述
+  `ret_code`，不替你判断 URL。
+- **HTTP 403 在这里的第一解释是限流，不是密钥失效。** 实测：连续导入约 484 条后服务开始对**每一批**
+  回 403（约 50 请求/秒）。此时**立刻做一次已认证读取会成功**，且库内条目数正好等于本地已记录的条数。
+  处理方式是**加间隔（1.2 秒/批）+ 并发降到 1 + 对 403 指数退避**，之后 438 条全部通过、失败 0。
+  插件自己的报错文案会建议你去重新生成密钥 —— **先别去**，那是错的。
+- **URL 导入会跟随重定向并去重**：`Crusader_Kings_III_Wiki` 实际落成 `CK3 Wiki`，所以提交的 URL
+  条数可以大于库内唯一 条目数（922 → 913），这**不是**缺口。
+- **标题是异步回填的**：刚导入时条目标题就是原始 URL，几分钟后才变成页面标题。所以
+  **不要用标题判断导入成没成**，也不要在回填完成前做基于标题的核对。
 
 ## 7. 卸载
 

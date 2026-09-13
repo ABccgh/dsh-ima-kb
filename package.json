@@ -20,6 +20,7 @@
     ".": {
       "default": "./lib/index.js"
     },
+    "./lib/client.js": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "author": "ABccgh",
